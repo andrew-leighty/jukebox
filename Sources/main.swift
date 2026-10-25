@@ -214,8 +214,18 @@ final class Music {
 
     private func control(_ cmd: String) throws -> String {
         let step = config.volumeStep
+        // Stop also hands Music back to the Mac's own speaker, so everyday listening isn't stuck on the HomePods.
+        let stopAndReset = """
+            stop
+            set macSpeaker to (first AirPlay device whose kind is computer)
+            set macName to name of macSpeaker
+            set selected of macSpeaker to true
+            repeat with n in (get name of every AirPlay device whose selected is true)
+                if (contents of n) is not macName then set selected of AirPlay device (contents of n) to false
+            end repeat
+            """
         let scripts: [String: String] = [
-            "stop": "stop",
+            "stop": stopAndReset,
             "pause": "pause",
             "play": "play",
             "resume": "play",

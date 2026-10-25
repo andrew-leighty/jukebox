@@ -39,7 +39,7 @@ In the Home Assistant iPhone app: Settings → Tags → **+** → Write tag, the
 | `Frayed At Both Ends` | Plays that album from your library on the default speaker (Theater Room) |
 | `Greatest Hits \| Queen` | Picks the artist when several albums share a title |
 | `Frayed At Both Ends @ Office` | Plays on another AirPlay speaker |
-| `Jukebox: Stop` | Also `Pause`, `Play`, `Play/Pause`, `Next`, `Previous`, `Volume Up`, `Volume Down`, `Volume 40` |
+| `Jukebox: Stop` | Stops and switches Music back to the Mac's own speaker. Also `Pause`, `Play`, `Play/Pause`, `Next`, `Previous`, `Volume Up`, `Volume Down`, `Volume 40` |
 
 The album must be in your Music library (add it from Apple Music first). If the exact title doesn't match, the helper falls back to any library album whose title contains the name. Problems show up as a "Jukebox" notification in Home Assistant.
 
