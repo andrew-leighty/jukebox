@@ -66,19 +66,21 @@ struct Config: Codable {
 
 enum Card {
     case album(name: String, artist: String?, room: String?)
+    case shuffle(room: String?)
     case control(String)
 
-    // "Album", "Album | Artist", "Album @ Room", "Album | Artist @ Room", "Jukebox: Stop"
+    // "Album", "Album | Artist", "Album @ Room", "Album | Artist @ Room",
+    // "Jukebox: Stop", "Jukebox: Shuffle", "Jukebox: Shuffle @ Room"
     static func parse(_ raw: String) -> Card {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.lowercased().hasPrefix("jukebox:") {
-            let cmd = text.dropFirst("jukebox:".count)
-            return .control(cmd.trimmingCharacters(in: .whitespaces).lowercased())
-        }
         var room: String?
         if let r = text.range(of: " @ ", options: .backwards) {
             room = text[r.upperBound...].trimmingCharacters(in: .whitespaces)
             text = String(text[..<r.lowerBound])
+        }
+        if text.lowercased().hasPrefix("jukebox:") {
+            let cmd = text.dropFirst("jukebox:".count).trimmingCharacters(in: .whitespaces).lowercased()
+            return cmd == "shuffle" ? .shuffle(room: room) : .control(cmd)
         }
         var artist: String?
         if let r = text.range(of: " | ", options: .backwards) {
@@ -126,9 +128,35 @@ final class Music {
         switch card {
         case let .album(name, artist, room):
             return try playAlbum(name, artist: artist, room: room)
+        case let .shuffle(room):
+            return try shuffleLibrary(room: room)
         case let .control(cmd):
             return try control(cmd)
         }
+    }
+
+    // Sends Music to one speaker only, at the starting volume.
+    private func useSpeaker(_ speaker: String) -> String {
+        """
+        set target to AirPlay device \(Music.quote(speaker))
+        set selected of target to true
+        repeat with n in (get name of every AirPlay device whose selected is true)
+            if (contents of n) is not \(Music.quote(speaker)) then set selected of AirPlay device (contents of n) to false
+        end repeat
+        set sound volume of target to \(config.startVolume)
+        """
+    }
+
+    private func shuffleLibrary(room: String?) throws -> String {
+        let speaker = try resolveRoom(room ?? config.defaultRoom)
+        try run("""
+            stop
+            \(useSpeaker(speaker))
+            set shuffle mode to songs
+            set shuffle enabled to true
+            play library playlist 1
+            """)
+        return "Shuffling the whole library on \(speaker)"
     }
 
     private struct Track {
@@ -180,12 +208,7 @@ final class Music {
             repeat with i in {\(ids)}
                 duplicate (some track of library playlist 1 whose database ID is (contents of i)) to jp
             end repeat
-            set target to AirPlay device \(Music.quote(speaker))
-            set selected of target to true
-            repeat with n in (get name of every AirPlay device whose selected is true)
-                if (contents of n) is not \(Music.quote(speaker)) then set selected of AirPlay device (contents of n) to false
-            end repeat
-            set sound volume of target to \(config.startVolume)
+            \(useSpeaker(speaker))
             set shuffle enabled to false
             set song repeat to off
             play jp
@@ -214,9 +237,11 @@ final class Music {
 
     private func control(_ cmd: String) throws -> String {
         let step = config.volumeStep
-        // Stop also hands Music back to the Mac's own speaker, so everyday listening isn't stuck on the HomePods.
+        // Stop also hands Music back to the Mac's own speaker with shuffle off, so everyday listening
+        // isn't stuck on the HomePods or left shuffled by a Jukebox: Shuffle card.
         let stopAndReset = """
             stop
+            set shuffle enabled to false
             set macSpeaker to (first AirPlay device whose kind is computer)
             set macName to name of macSpeaker
             set selected of macSpeaker to true
@@ -450,6 +475,8 @@ case "serve":
         case "play":
             let album = text("album") ?? ""
             run(.album(name: album, artist: text("artist"), room: text("room")), label: "Play \"\(album)\"")
+        case "shuffle":
+            run(.shuffle(room: text("room")), label: "Shuffle")
         default:
             run(.control(action), label: "Control")
         }
